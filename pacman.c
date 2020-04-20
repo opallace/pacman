@@ -4,10 +4,10 @@
 #include <time.h>
 #include <math.h>
 
-#define LEFT  'A'
-#define RIGHT 'D'
-#define UP    'W'
-#define DOWN  'S'
+#define LEFT  65
+#define RIGHT 68
+#define UP    87
+#define DOWN  83
 
 #define VELOCITY 400
 #define DIRECTIONDELAY 100
@@ -26,6 +26,7 @@ typedef struct{
 typedef struct{
 	int x;
 	int y;
+	char direction;
 } Ghost;
 
 typedef struct{
@@ -90,7 +91,7 @@ int validMove(Map map, int posY, int posX){
 
 int exists(int x, int y, Ghost *ghosts){
 	int i, j;
-	for(i = 0; i < 2; i++){
+	for(i = 0; i < 4; i++){
 		if(ghosts[i].y == y && ghosts[i].x == x){
 			return 1;
 		}
@@ -183,7 +184,7 @@ void movePacman(Map map, Pacman *pacman){
 		case LEFT:
 			if(validMove(map, pacman->y, pacman->x-1)){
 				if(map.map[pacman->y][pacman->x-1] == '|'){
-					pacman->x = 27;
+					pacman->x = 26;
 				}else {
 					pacman->x--;
 				}
@@ -192,7 +193,7 @@ void movePacman(Map map, Pacman *pacman){
 		case RIGHT:
 			if(validMove(map, pacman->y, pacman->x+1)){
 				if(map.map[pacman->y][pacman->x+1] == '|'){
-					pacman->x = 0;
+					pacman->x = 1;
 				}else {
 					pacman->x++;
 				}
@@ -203,41 +204,149 @@ void movePacman(Map map, Pacman *pacman){
 	eat(&map, pacman);
 }
 
+int* possibilitiesMoviments(Map map, Ghost *ghost, int *nP){
+	int *moviments = NULL;
+	
+	if(validMove(map, ghost->y-1, ghost->x)){
+		moviments = (int *)realloc(moviments, ++(*nP) * sizeof(int));
+		moviments[*nP -1] = UP;
+	}
+			
+	if(validMove(map, ghost->y+1, ghost->x)){
+		moviments = (int *)realloc(moviments, ++(*nP) * sizeof(int));
+		moviments[*nP-1] = DOWN;
+	}
+			
+	if(validMove(map, ghost->y, ghost->x-1)){
+		moviments = (int *)realloc(moviments, ++(*nP) * sizeof(int));
+		moviments[*nP-1] = LEFT;
+	}
+			
+	if(validMove(map, ghost->y, ghost->x+1)){
+		moviments = (int *)realloc(moviments, ++(*nP) * sizeof(int));
+		moviments[*nP-1] = RIGHT;
+	}	
+	
+	return moviments;
+}
+
+int continuaMov(int a, int *b, int size){
+	int i;
+	for(i = 0; i < size; i++){
+		if(a == b[i]){
+			return 1;
+		}
+	}
+	
+	return 0;
+}
+
+void decideMovement(Ghost *ghost, int *possibilities, int nP){
+	int i, j, k = 0;
+	
+	
+	int pool[12];
+	
+	if(nP > 2){
+		for(i = 0; i < nP; i++){
+			for(j = 0; j < 12/nP; j++){
+				pool[k++] = possibilities[i];
+			}
+		}
+	}else {
+		
+		if(continuaMov(ghost->direction, possibilities, nP)){
+			
+			for(i = 0; i < nP; i++){
+				if(ghost->direction == possibilities[i]){
+					for(j = 0; j < 12; j++){
+						pool[k++] = possibilities[i];
+					}
+				}
+			}
+			
+		}else {
+			for(i = 0; i < nP; i++){
+				for(j = 0; j < 12/nP; j++){
+					pool[k++] = possibilities[i];
+				}
+			}
+		}
+	}
+	
+	ghost->direction = pool[rand()%12];
+}
+
 void moveGhost(Map map, Ghost *ghost, Pacman *pacman, int *gameover){
 	int shortestDist  = calcDist(ghost->x, ghost->y, pacman->x, pacman->y);
 	int GHTposX_short = ghost->x;
 	int GHTposY_short = ghost->y;
-
-	if(validMove(map, ghost->y, ghost->x+1) && (calcDist(ghost->x+1, ghost->y, pacman->x, pacman->y)) < shortestDist){
-		GHTposX_short++;
-	}else if(validMove(map, ghost->y, ghost->x-1) && (calcDist(ghost->x-1, ghost->y, pacman->x, pacman->y)) < shortestDist){
-		GHTposX_short--;
-	}else if(validMove(map, ghost->y+1, ghost->x) && (calcDist(ghost->x, ghost->y+1, pacman->x, pacman->y)) < shortestDist){
-		GHTposY_short++;
-	}else if(validMove(map, ghost->y-1, ghost->x) && (calcDist(ghost->x, ghost->y-1, pacman->x, pacman->y)) < shortestDist){
-		GHTposY_short--;
-	}
 	
-	if(GHTposX_short == ghost->x && GHTposY_short == ghost->y){
-		if(validMove(map, ghost->y, ghost->x+1) && pow((ghost->x+1) - pacman->x, 2) < pow(ghost->x - pacman->x, 2)){
+	if(shortestDist > 7){
+		
+		int nP = 0;
+		int *moviments = possibilitiesMoviments(map, ghost, &nP);
+		
+		decideMovement(ghost, moviments, nP);
+		
+		switch(ghost->direction){
+			case UP:
+				ghost->y--;
+				break;
+			case DOWN:
+				ghost->y++;
+				break;
+			case LEFT:
+				if(map.map[ghost->y][ghost->x-1] == '|'){
+					ghost->x = 26;
+				}else {
+					ghost->x--;
+				}	
+				break;
+			case RIGHT:
+				if(map.map[ghost->y][ghost->x+1] == '|'){
+					ghost->x = 1;
+				}else {
+					ghost->x++;
+				}
+				break;
+		}
+		
+		free(moviments);
+		
+	}else {
+		
+		if(validMove(map, ghost->y, ghost->x+1) && (calcDist(ghost->x+1, ghost->y, pacman->x, pacman->y)) < shortestDist){
 			GHTposX_short++;
-		}else if(validMove(map, ghost->y, ghost->x-1) && pow((ghost->x-1) - pacman->x, 2) < pow(ghost->x - pacman->x, 2)){
+		}else if(validMove(map, ghost->y, ghost->x-1) && (calcDist(ghost->x-1, ghost->y, pacman->x, pacman->y)) < shortestDist){
 			GHTposX_short--;
-		}else if(validMove(map, ghost->y+1, ghost->x) && pow((ghost->y+1) - pacman->y, 2) < pow(ghost->y - pacman->y, 2)){
+		}else if(validMove(map, ghost->y+1, ghost->x) && (calcDist(ghost->x, ghost->y+1, pacman->x, pacman->y)) < shortestDist){
 			GHTposY_short++;
-		}else if(validMove(map, ghost->y-1, ghost->x) && pow((ghost->y-1) - pacman->y, 2) < pow(ghost->y - pacman->y, 2)){
+		}else if(validMove(map, ghost->y-1, ghost->x) && (calcDist(ghost->x, ghost->y-1, pacman->x, pacman->y)) < shortestDist){
 			GHTposY_short--;
 		}
+		
+		if(GHTposX_short == ghost->x && GHTposY_short == ghost->y){
+			if(validMove(map, ghost->y, ghost->x+1) && pow((ghost->x+1) - pacman->x, 2) < pow(ghost->x - pacman->x, 2)){
+				GHTposX_short++;
+			}else if(validMove(map, ghost->y, ghost->x-1) && pow((ghost->x-1) - pacman->x, 2) < pow(ghost->x - pacman->x, 2)){
+				GHTposX_short--;
+			}else if(validMove(map, ghost->y+1, ghost->x) && pow((ghost->y+1) - pacman->y, 2) < pow(ghost->y - pacman->y, 2)){
+				GHTposY_short++;
+			}else if(validMove(map, ghost->y-1, ghost->x) && pow((ghost->y-1) - pacman->y, 2) < pow(ghost->y - pacman->y, 2)){
+				GHTposY_short--;
+			}
+		}
+		
+		ghost->x = GHTposX_short;
+		ghost->y = GHTposY_short;
 	}
-	
-	ghost->x = GHTposX_short;
-	ghost->y = GHTposY_short;
 	
 	if(ghost->x == pacman->x && ghost->y == pacman->y){
 		if(pacman->invincibility){
 			pacman->points += 200;
-			ghost->x = 13;
-			ghost->y = 11;
+			ghost->x = 14;
+			ghost->y = 14;
 		}else {
 			*gameover = 1;
 		}
@@ -251,26 +360,41 @@ int calcDist(int x, int y, int X, int Y){
 int main(){
 	
 	int gameover = 0;
+	int movement[4] = {UP, DOWN, LEFT, RIGHT};
 
 	Pacman pacman;
-	pacman.x = 13;
-	pacman.y = 11;
+	pacman.x = 14;
+	pacman.y = 23;
 	pacman.points = 0;
 	pacman.invincibility = 0;
 	pacman.direction = RIGHT;
 	pacman.skin = 'c';
 	
 	Ghost blinky;
-	blinky.x = 6;
-	blinky.y = 20;
+	blinky.x = 13;
+	blinky.y = 11;
+	blinky.direction = movement[rand()%4];
+	
+	Ghost pink;
+	pink.x = 15;
+	pink.y = 14;
+	pink.direction = movement[rand()%4];
+	
+	Ghost inky;
+	inky.x = 14;
+	inky.y = 14;
+	inky.direction = movement[rand()%4];
 	
 	Ghost clyde;
-	clyde.x = 21;
-	clyde.y = 5;
+	clyde.x = 13;
+	clyde.y = 14;
+	clyde.direction = movement[rand()%4];
 	
-	Ghost ghosts[2];
+	Ghost ghosts[4];
 	ghosts[0] = blinky;
 	ghosts[1] = clyde;
+	ghosts[2] = pink;
+	ghosts[3] = inky;
 	
 	Map map;
 	map.map = createMap();
@@ -278,9 +402,15 @@ int main(){
 	showMap(map, pacman, ghosts);
 	
 	clock_t timerDD = clock();
-	clock_t timerV = clock();
+	clock_t timerV  = clock();
+	clock_t door    = clock();
 	
 	while(!gameover){
+		if(clock() - door > 3000){
+			map.map[12][13] = ' ';
+			map.map[12][14] = ' ';
+		}
+		
 		if(clock() - pacman.invincibilityTimer > INVENCIBILITYTIMER && pacman.invincibility){
 			pacman.invincibility = 0;
 			pacman.skin = 'c';
@@ -297,8 +427,8 @@ int main(){
 			movePacman(map, &pacman);
 		
 			int i;
-			for(i = 0; i < 2;i++){
-				moveGhost(map, &ghosts[i], &pacman, &gameover);
+			for(i = 0; i < 4;i++){
+				moveGhost(map, &(ghosts[i]), &pacman, &gameover);
 			}
 			
 			showMap(map, pacman, ghosts);
